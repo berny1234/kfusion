@@ -63,9 +63,9 @@ message("OPENNI_FOUND")
 
 	include_directories(${OPENNI_INCLUDE_DIRS})
 	add_executable(openNIInterfaceTest
-		openNIInterfaceTest.cpp
+		openNIInterfaceTest.cpp 
 		)
-	target_link_libraries(kfusion_test kfusion ${OPENNI_LIBRARIES}) 
+	target_link_libraries(openNIInterfaceTest ${OPENNI_LIBRARIES}) 
 
 endif()
 

@@ -27,7 +27,7 @@ if (WIN32)
              PATHS ENV OPEN_NI_INCLUDE PATH PATH_SUFFIXES Include)
 
   # Find the base openNI library
-  find_library (OPENNI_LIBRARY openNI PATHS ENV OPEN_NI_LIB)
+  find_library (OPENNI_LIBRARY openNI64 PATHS ENV OPEN_NI_LIB  ${OPENNI_INCLUDE_DIR}/../Lib64)
 
 else (WIN32)
 
