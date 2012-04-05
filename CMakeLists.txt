@@ -10,6 +10,7 @@ find_package(OpenGL)
 find_package(Freenect)
 find_package(GLEW)
 find_package(GLUT)
+find_package(OpenNI)
 
 include_directories(
 	${CMAKE_BINARY_DIR}/include
@@ -54,6 +55,17 @@ if(GLUT_FOUND AND GLEW_FOUND)
 		)
 	
 	target_link_libraries(kfusion_test kfusion ${GLUT_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES}) 
+
+endif()
+
+if(OPENNI_FOUND)
+message("OPENNI_FOUND")
+
+	include_directories(${OPENNI_INCLUDE_DIRS})
+	add_executable(openNIInterfaceTest
+		openNIInterfaceTest.cpp
+		)
+	target_link_libraries(kfusion_test kfusion ${OPENNI_LIBRARIES}) 
 
 endif()
 
