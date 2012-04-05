@@ -2,7 +2,7 @@
 #define HELPERS_H
 
 #include "kfusion.h"
-
+#include <float.h>
 #include <TooN/se3.h>
 
 #include <cuda_gl_interop.h> // includes cuda_gl_interop.h

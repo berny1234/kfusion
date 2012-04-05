@@ -1,3 +1,7 @@
+#ifdef WIN32
+#include <GL/glew.h>
+#endif
+
 #include "kfusion.h"
 #include "helpers.h"
 

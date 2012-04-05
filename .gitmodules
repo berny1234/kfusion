@@ -1,3 +1,6 @@
 [submodule "thirdparty/TooN"]
 	path = thirdparty/TooN
 	url = git://git.savannah.nongnu.org/toon.git
+[submodule "thirdparty/libfreenect"]
+	path = thirdparty/libfreenect
+	url = https://github.com/OpenKinect/libfreenect.git

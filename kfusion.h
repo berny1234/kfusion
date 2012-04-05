@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <stdint.h>
 
 #include <vector_types.h>
 #include <vector_functions.h>

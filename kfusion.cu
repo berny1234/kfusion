@@ -9,7 +9,7 @@
 #include <TooN/se3.h>
 #include <TooN/GR_SVD.h>
 
-static const float INVALID = -2;   // this is used to mark invalid entries in normal or vertex maps
+#define INVALID -2   // this is used to mark invalid entries in normal or vertex maps
 
 using namespace std;
 

@@ -8,6 +8,7 @@ find_package(CUDA REQUIRED)
 find_package(TooN REQUIRED)
 find_package(OpenGL)
 find_package(Freenect)
+find_package(GLEW)
 find_package(GLUT)
 
 include_directories(
@@ -34,24 +35,26 @@ cuda_add_library(kfusion SHARED
 	-O3
 	)
 
-if (GLUT_FOUND AND FREENECT_FOUND)
-	
-	include_directories(${FREENECT_INCLUDE_PATHS})
+if (GLUT_FOUND AND FREENECT_FOUND AND GLEW_FOUND)
+	include_directories(${FREENECT_INCLUDE_PATHS} ${GLUT_INCLUDE_DIR} ${GLEW_INCLUDE_DIR})
 
 	add_executable(kfusion_kinect
 		kinect.cpp
 		)
-	target_link_libraries(kfusion_kinect kfusion ${FREENECT_LIBRARIES} ${GLUT_LIBRARIES} ${OPENGL_LIBRARIES} ) 
+	target_link_libraries(kfusion_kinect kfusion ${FREENECT_LIBRARIES} ${GLUT_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES}) 
 
 endif()
 
 
-if(GLUT_FOUND)
+if(GLUT_FOUND AND GLEW_FOUND)
 
+	include_directories(${GLUT_INCLUDE_DIR} ${GLEW_INCLUDE_DIR})
 	add_executable(kfusion_test
 		test.cpp
 		)
 	
-	target_link_libraries(kfusion_test kfusion ${GLUT_LIBRARIES} ${OPENGL_LIBRARIES}) 
+	target_link_libraries(kfusion_test kfusion ${GLUT_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES}) 
 
 endif()
+
+
