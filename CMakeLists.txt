@@ -28,7 +28,7 @@ set(kfusion_cuda_srcs
 	cutil_math.h
 	)
 	
-cuda_add_library(kfusion SHARED
+cuda_add_library(kfusion STATIC
 	${kfusion_cuda_srcs}
 	perfstats.h
 	OPTIONS
