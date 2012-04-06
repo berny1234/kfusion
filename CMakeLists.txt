@@ -67,6 +67,12 @@ message("OPENNI_FOUND")
 		)
 	target_link_libraries(openNIInterfaceTest ${OPENNI_LIBRARIES} ${GLUT_LIBRARIES}) 
 
+	add_definitions(-DNOMINMAX)
+	cuda_add_executable(kinectOpenNI
+		kinectOpenNI.cpp ${kfusion_cuda_srcs} #for now
+		)
+	target_link_libraries(kinectOpenNI ${OPENNI_LIBRARIES} ${GLUT_LIBRARIES}) 
+
 endif()
 
 
