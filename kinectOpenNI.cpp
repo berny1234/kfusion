@@ -48,7 +48,9 @@ std::vector<DepthGenerator> g_depths;
 std::vector<ImageGenerator> g_images;
 
 KFusion kfusion;
-Image<uchar4, HostDevice> lightScene, depth, lightModel;
+Image<uchar4, HostDevice> lightScene, lightModel;
+
+std::vector<Image<uchar4, HostDevice>> depths;
 //Image<uint16_t, HostDevice> depthImage;
 
 std::vector<Image<uint16_t, HostDevice>> depthImages;
@@ -57,6 +59,7 @@ const float3 light = make_float3(1.0, -2, 1.0);
 const float3 ambient = make_float3(0.1, 0.1, 0.1);
 
 SE3<float> initPose;
+SE3<float> initPose2;
 
 int counter = 0;
 bool reset = true;
@@ -96,26 +99,27 @@ void display(void){
 
 		xnOSMemCopy(depthImages[i].data(), g_depths[i].GetDepthMap(), depthImages[i].size.x*depthImages[i].size.y*sizeof(XnDepthPixel));
 
-	////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////
 
-	kfusion.setKinectDeviceDepth(depthImages[i].getDeviceImage());
-	Stats.sample("raw to cooked");
+		kfusion.setKinectDeviceDepth(depthImages[i].getDeviceImage());
+		Stats.sample("raw to cooked");
 
-	integrate = kfusion.Track();
-	Stats.sample("track");
+		integrate = kfusion.Track();
+		Stats.sample("track");
 
-	if(integrate || reset){
-		kfusion.Integrate();
-		Stats.sample("integrate");
-		reset = false;
-	}
-
+		if(integrate || reset){
+			kfusion.Integrate();
+			Stats.sample("integrate");
+			reset = false;
+		}
+		cudaDeviceSynchronize();
 	}
 
 
 	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
 	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
-	renderTrackResult( depth.getDeviceImage(), kfusion.reductions[1] );
+	renderTrackResult( depths[0].getDeviceImage(), kfusion.reductions[0] );
+	renderTrackResult( depths[1].getDeviceImage(), kfusion.reduction );
 	cudaDeviceSynchronize();
 
 	Stats.sample("render");
@@ -124,9 +128,11 @@ void display(void){
 	glRasterPos2i(0,imageSize.y * 0);
 	glDrawPixels(lightScene);
 	glRasterPos2i(imageSize.x, imageSize.y * 0);
-	glDrawPixels(depth);
+	glDrawPixels(depths[0]);
 	glRasterPos2i(0,imageSize.y * 1);
 	glDrawPixels(lightModel);
+	glRasterPos2i(imageSize.x,imageSize.y * 1);
+	glDrawPixels(depths[1]);
 	const double endProcessing = Stats.sample("draw");
 
 	Stats.sample("total", endProcessing - startFrame, PerfStats::TIME);
@@ -294,24 +300,21 @@ int main(int argc, char* argv[])
 	if(printCUDAError())
 		exit(1);
 
-	for(int i = 0; i<g_contexts.size(); i++)
-	{
-		kfusion.addPose(toMatrix4(initPose));
-	}
+	initPose = SE3<float>(makeVector(size/2, size/2, 0, 0, 0, 0));
+	kfusion.addPose(toMatrix4(initPose));
+	initPose2 = SE3<float>(makeVector(size/2, -size/2, 0, 0, 0, 0));
+	kfusion.addPose(toMatrix4(initPose));
 
-	lightScene.alloc(config.inputSize), depth.alloc(config.inputSize), lightModel.alloc(config.inputSize);
+
+	lightScene.alloc(config.inputSize), lightModel.alloc(config.inputSize);
 //	depthImage.alloc(make_uint2(640, 480));
-
+	depthImages.resize(g_contexts.size());
+	depths.resize(g_contexts.size());
 	for(int i = 0; i<g_contexts.size(); i++)
 	{
-		Image<uint16_t, HostDevice> dImage;
-		depthImages.push_back(dImage);
-		depthImages[i].alloc(make_uint2(640, 480));
-
+		depthImages[i].alloc(config.inputSize);
+		depths[i].alloc(config.inputSize);
 	}
-
-	//if(InitKinect(depthImage.data()))
-	//	exit(1);
 
 	atexit(exitFunc);
 	glutDisplayFunc(display);

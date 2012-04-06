@@ -400,10 +400,9 @@ void KFusion::Init( const KFusionConfig & config ) {
 
     integration.init(config.volumeSize, config.volumeDimensions);
 
+	reductions.resize(config.numUsedDevices);
 	for(int i = 0; i < config.numUsedDevices; i++)
 	{
-		Image<TrackData, Device> red;
-		reductions.push_back(red);
 		reductions[i].alloc(config.inputSize);
 	}
 
