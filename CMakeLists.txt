@@ -58,14 +58,14 @@ if(GLUT_FOUND AND GLEW_FOUND)
 
 endif()
 
-if(OPENNI_FOUND)
+if(OPENNI_FOUND AND GLUT_FOUND)
 message("OPENNI_FOUND")
 
-	include_directories(${OPENNI_INCLUDE_DIRS})
+	include_directories(${GLUT_INCLUDE_DIR} ${OPENNI_INCLUDE_DIRS})
 	add_executable(openNIInterfaceTest
 		openNIInterfaceTest.cpp 
 		)
-	target_link_libraries(openNIInterfaceTest ${OPENNI_LIBRARIES}) 
+	target_link_libraries(openNIInterfaceTest ${OPENNI_LIBRARIES} ${GLUT_LIBRARIES}) 
 
 endif()
 
