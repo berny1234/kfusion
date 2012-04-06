@@ -67,7 +67,7 @@ void display(void) {
     normal = kfusion.normal;
     Stats.sample("track get");
 
-    renderTrackResult(rgb.getDeviceImage(), kfusion.reduction);
+    renderTrackResult(rgb.getDeviceImage(), kfusion.reductions[0]);
     cudaDeviceSynchronize();
     Stats.sample("track render");
     Stats.sample("track copy");
@@ -87,7 +87,7 @@ void display(void) {
     }
     Stats.sample("total track", Stats.get_time() - track_start, PerfStats::TIME);
 
-    renderInput(vertex.getDeviceImage(), normal.getDeviceImage(), depth.getDeviceImage(), kfusion.integration,  kfusion.pose * getInverseCameraMatrix(kfusion.configuration.camera), kfusion.configuration.nearPlane, kfusion.configuration.farPlane, kfusion.configuration.stepSize(), 0.7 * kfusion.configuration.mu );
+    renderInput(vertex.getDeviceImage(), normal.getDeviceImage(), depth.getDeviceImage(), kfusion.integration,  kfusion.poses[0] * getInverseCameraMatrix(kfusion.configuration.camera), kfusion.configuration.nearPlane, kfusion.configuration.farPlane, kfusion.configuration.stepSize(), 0.7 * kfusion.configuration.mu );
     cudaDeviceSynchronize();
     Stats.sample("view raycast");
     Stats.sample("view copy");
@@ -119,14 +119,14 @@ void display(void) {
 void keys(unsigned char key, int x, int y) {
     switch(key){
     case 'r':
-        kfusion.setPose( toMatrix4( trans * rot * preTrans ));
+        kfusion.setPose( toMatrix4( trans * rot * preTrans ), 0);
         break;
     case 'c':
         kfusion.Reset();
-        kfusion.setPose( toMatrix4( trans * rot * preTrans ));
+        kfusion.setPose( toMatrix4( trans * rot * preTrans ), 0);
         break;
     case 'd':
-        cout << kfusion.pose << endl;
+        cout << kfusion.poses[0] << endl;
         break;
     case 'q':
         exit(0);
@@ -197,6 +197,7 @@ int main(int argc, char ** argv) {
 
     config.dist_threshold = 0.2f;
     config.normal_threshold = 0.8f;
+	config.numUsedDevices = 1;
 
     kfusion.Init(config);
     reference.init(config.volumeSize, config.volumeDimensions);
@@ -207,7 +208,7 @@ int main(int argc, char ** argv) {
     setBoxWrap(reference, make_float3(0.8f,0.1f,0.1f), make_float3(0.9f, 0.9f, 0.9f), -1.0f);
     setSphereWrap(reference, make_float3(0.5f), 0.2f, -1.0f);
 
-    kfusion.setPose( toMatrix4( trans * rot * preTrans ));
+    kfusion.addPose( toMatrix4( trans * rot * preTrans ));
 
     vertex.alloc(config.inputSize);
     normal.alloc(config.inputSize);

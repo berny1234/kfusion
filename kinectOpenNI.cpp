@@ -31,15 +31,6 @@ using namespace TooN;
 //---------------------------------------------------------------------------
 // Defines
 //---------------------------------------------------------------------------
-#define GL_WIN_SIZE_X 1280
-#define GL_WIN_SIZE_Y 1024
-
-#define DISPLAY_MODE_OVERLAY	1
-#define DISPLAY_MODE_DEPTH		2
-#define DISPLAY_MODE_IMAGE		3
-#define DEFAULT_DISPLAY_MODE	DISPLAY_MODE_DEPTH
-
-#define MAX_DEPTH 10000
 
 #ifndef GL_SGIS_generate_mipmap
 #define GL_GENERATE_MIPMAP_SGIS           0x8191
@@ -50,18 +41,9 @@ using namespace TooN;
 //---------------------------------------------------------------------------
 // Globals
 //---------------------------------------------------------------------------
-float g_pDepthHist[MAX_DEPTH];
-std::vector<XnRGB24Pixel*> g_pTexMaps;
-unsigned int g_nTexMapX = 0;
-unsigned int g_nTexMapY = 0;
-
-unsigned int g_nViewState = DEFAULT_DISPLAY_MODE;
 XnMapOutputMode g_defaultMode;
 
 std::vector<Context> g_contexts;
-//Context g_context;
-std::vector<ScriptNode> g_scriptNodes;
-//DepthGenerator g_depth;
 std::vector<DepthGenerator> g_depths;
 std::vector<ImageGenerator> g_images;
 
@@ -100,12 +82,12 @@ void display(void){
 	const double startProcessing = Stats.sample("kinect");
 	////////////////////////////////////////////////////////////////////////
 	//DepthFrameKinect();
-	//for(int i = 0; i < g_contexts.size(); i++)
-	//{
-
+	for(int i = 0; i < g_contexts.size(); i++)
+	{
+		kfusion.setKFusionDevice(i);
 		XnStatus rc = XN_STATUS_OK;
-		int i = 0; //TODO
-		rc = g_contexts[i].WaitOneUpdateAll(g_depths[i]);
+		//int i = 0; //TODO
+		rc = g_contexts[i].WaitAnyUpdateAll();
 		if (rc != XN_STATUS_OK)
 		{
 			printf("Read failed: %s\n", xnGetStatusString(rc));
@@ -113,10 +95,6 @@ void display(void){
 		}
 
 		xnOSMemCopy(depthImages[i].data(), g_depths[i].GetDepthMap(), depthImages[i].size.x*depthImages[i].size.y*sizeof(XnDepthPixel));
-	//}
-
-	//printf("depth image size %d %d\n", depthImage.size.x*depthImage.size.y);
-	//printf("depth image size %d %d\n",  g_depths[i].GetDataSize());
 
 	////////////////////////////////////////////////////////////////////////
 
@@ -132,10 +110,11 @@ void display(void){
 		reset = false;
 	}
 
+	}
 
 	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
 	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
-	renderTrackResult( depth.getDeviceImage(), kfusion.reduction );
+	renderTrackResult( depth.getDeviceImage(), kfusion.reductions[1] );
 	cudaDeviceSynchronize();
 	//}
 
@@ -177,7 +156,10 @@ void keys(unsigned char key, int x, int y){
 	switch(key){
 	case 'c':
 		kfusion.Reset();
-		kfusion.setPose(toMatrix4(initPose));
+		for(int i = 0; i<g_contexts.size(); i++)
+		{
+			kfusion.setPose(toMatrix4(initPose), i);
+		}
 		reset = true;
 		break;
 	case 'q':
@@ -285,6 +267,7 @@ int main(int argc, char* argv[])
 	config.farPlane = 5.0f;
 	config.mu = 0.1;
 	config.combinedTrackAndReduce = false;
+	config.numUsedDevices = g_contexts.size();
 
 	// change the following parameters for using 640 x 480 input images
 	config.inputSize = make_uint2(640,480); 
@@ -311,7 +294,10 @@ int main(int argc, char* argv[])
 	if(printCUDAError())
 		exit(1);
 
-	kfusion.setPose(toMatrix4(initPose));
+	for(int i = 0; i<g_contexts.size(); i++)
+	{
+		kfusion.addPose(toMatrix4(initPose));
+	}
 
 	lightScene.alloc(config.inputSize), depth.alloc(config.inputSize), lightModel.alloc(config.inputSize);
 //	depthImage.alloc(make_uint2(640, 480));

@@ -38,6 +38,8 @@ struct KFusionConfig {
     dim3 imageBlock;            // block size for image operations
     dim3 raycastBlock;          // block size for raycasting
 
+	int numUsedDevices; // sets how many kinects are used
+
     KFusionConfig(){
         volumeSize = make_uint3(64);
         volumeDimensions = make_float3(1.f);
@@ -64,6 +66,8 @@ struct KFusionConfig {
 
         imageBlock = dim3(32,16);
         raycastBlock = dim3(32,8);
+
+		numUsedDevices = 1;
     }
 
     float stepSize() const {  return min(volumeDimensions)/max(volumeSize); }          // step size for raycasting
@@ -408,7 +412,8 @@ struct TrackData {
 
 struct KFusion {
     Volume integration;
-    Image<TrackData, Device> reduction;
+	Image<TrackData, Device> reduction;
+    std::vector<Image<TrackData, Device>> reductions;
     Image<float3, Device> vertex, normal;
 
     std::vector<Image<float3, Device> > inputVertex, inputNormal;
@@ -421,12 +426,17 @@ struct KFusion {
 
     KFusionConfig configuration;
 
-    Matrix4 pose;
+   // Matrix4 pose;
+	std::vector<Matrix4> poses;
+	int kFusionDevice;
 
     void Init( const KFusionConfig & config ); // allocates the volume and image data on the device
     void Clear();  // releases the allocated device memory
 
-    void setPose( const Matrix4 & p ); // sets the current pose of the camera
+    void addPose( const Matrix4 & p ); // adds a pose of a camera
+	void setPose( const Matrix4 & p, const int d  ); // sets the current pose of the camera
+
+	void setKFusionDevice( const int d ); // sets the current kfusion device
 
     // high level API to run a simple tracking - reconstruction loop
     void Reset(); // removes all reconstruction information

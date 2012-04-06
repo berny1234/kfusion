@@ -400,7 +400,14 @@ void KFusion::Init( const KFusionConfig & config ) {
 
     integration.init(config.volumeSize, config.volumeDimensions);
 
-    reduction.alloc(config.inputSize);
+	for(int i = 0; i < config.numUsedDevices; i++)
+	{
+		Image<TrackData, Device> red;
+		reductions.push_back(red);
+		reductions[i].alloc(config.inputSize);
+	}
+
+	reduction.alloc(config.inputSize);
     vertex.alloc(config.inputSize);
     normal.alloc(config.inputSize);
     rawDepth.alloc(config.inputSize);
@@ -434,8 +441,16 @@ void KFusion::Clear(){
     integration.release();
 }
 
-void KFusion::setPose( const Matrix4 & p ){
-    pose = p;
+void KFusion::addPose( const Matrix4 & p ){
+	poses.push_back(p);
+}
+
+void KFusion::setPose( const Matrix4 & p, const int d ){
+	poses[d] = p;
+}
+
+void KFusion::setKFusionDevice( const int d ){
+    kFusionDevice = d;
 }
 
 void KFusion::setKinectDeviceDepth( const Image<uint16_t> & in ){
@@ -509,7 +524,7 @@ bool KFusion::Track() {
         grids.push_back(divup(configuration.inputSize >> i, configuration.imageBlock));
 
     // raycast integration volume into the depth, vertex, normal buffers
-    raycast<<<divup(configuration.inputSize, configuration.raycastBlock), configuration.raycastBlock>>>(vertex, normal, integration, pose * invK, configuration.nearPlane, configuration.farPlane, configuration.stepSize(), 0.75 * configuration.mu);
+    raycast<<<divup(configuration.inputSize, configuration.raycastBlock), configuration.raycastBlock>>>(vertex, normal, integration, poses[kFusionDevice] * invK, configuration.nearPlane, configuration.farPlane, configuration.stepSize(), 0.75 * configuration.mu);
 
     // filter the input depth map
     bilateral_filter<<<grids[0], configuration.imageBlock>>>(inputDepth[0], rawDepth, gaussian, configuration.e_delta, configuration.radius);
@@ -524,37 +539,37 @@ bool KFusion::Track() {
         vertex2normal<<<grids[i], configuration.imageBlock>>>( inputNormal[i], inputVertex[i] );
     }
 
-    const Matrix4 oldPose = pose;
-    const Matrix4 projectReference = getCameraMatrix(configuration.camera) * inverse(pose);
+    const Matrix4 oldPose = poses[kFusionDevice];
+    const Matrix4 projectReference = getCameraMatrix(configuration.camera) * inverse(poses[kFusionDevice]);
 
     TooN::Matrix<8, 32, float, TooN::Reference::RowMajor> values(output.data());
     for(int level = configuration.iterations.size()-1; level >= 0; --level){
         for(int i = 0; i < configuration.iterations[level]; ++i){
             if(configuration.combinedTrackAndReduce){
-                trackAndReduce<<<8, 112>>>( output.getDeviceImage().data(), inputVertex[level], inputNormal[level], vertex, normal, pose, projectReference, configuration.dist_threshold, configuration.normal_threshold );
+                trackAndReduce<<<8, 112>>>( output.getDeviceImage().data(), inputVertex[level], inputNormal[level], vertex, normal, poses[kFusionDevice], projectReference, configuration.dist_threshold, configuration.normal_threshold );
             } else {
-                track<<<grids[level], configuration.imageBlock>>>( reduction, inputVertex[level], inputNormal[level], vertex, normal, pose, projectReference, configuration.dist_threshold, configuration.normal_threshold);
-                reduce<<<8, 112>>>( output.getDeviceImage().data(), reduction, inputVertex[level].size );             // compute the linear system to solve
+                track<<<grids[level], configuration.imageBlock>>>( reductions[kFusionDevice], inputVertex[level], inputNormal[level], vertex, normal, poses[kFusionDevice], projectReference, configuration.dist_threshold, configuration.normal_threshold);
+                reduce<<<8, 112>>>( output.getDeviceImage().data(), reductions[kFusionDevice], inputVertex[level].size );             // compute the linear system to solve
             }
             cudaDeviceSynchronize(); // important due to async nature of kernel call
             for(int j = 1; j < 8; ++j)
                 values[0] += values[j];
             TooN::Vector<6> x = solve(values[0].slice<1,27>());
             TooN::SE3<> delta(x);
-            pose = toMatrix4( delta ) * pose;
+            poses[kFusionDevice] = toMatrix4( delta ) * poses[kFusionDevice];
             if(norm(x) < 1e-5)
                 break;
         }
     }
     if(sqrt(values(0,0) / values(0,28)) > 2e-2){
-        pose = oldPose;
+        poses[kFusionDevice] = oldPose;
         return false;
     }
     return true;
 }
 
 void KFusion::Integrate() {
-    integrate<<<divup(dim3(integration.size.x, integration.size.y), configuration.imageBlock), configuration.imageBlock>>>( integration, rawDepth, inverse(pose), getCameraMatrix(configuration.camera), configuration.mu, configuration.maxweight );
+    integrate<<<divup(dim3(integration.size.x, integration.size.y), configuration.imageBlock), configuration.imageBlock>>>( integration, rawDepth, inverse(poses[kFusionDevice]), getCameraMatrix(configuration.camera), configuration.mu, configuration.maxweight );
 }
 
 int printCUDAError() {
