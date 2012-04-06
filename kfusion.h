@@ -412,7 +412,6 @@ struct TrackData {
 
 struct KFusion {
     Volume integration;
-	//Image<TrackData, Device> reduction;
     std::vector<Image<TrackData, Device>> reductions;
     Image<float3, Device> vertex, normal;
 

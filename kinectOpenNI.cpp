@@ -89,7 +89,6 @@ void display(void){
 	{
 		kfusion.setKFusionDevice(i);
 		XnStatus rc = XN_STATUS_OK;
-		//int i = 0; //TODO
 		rc = g_contexts[i].WaitAnyUpdateAll();
 		if (rc != XN_STATUS_OK)
 		{
@@ -115,7 +114,7 @@ void display(void){
 		cudaDeviceSynchronize();
 	}
 
-
+	//TODO: this is now just debug output for the first two devices. 
 	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
 	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
 	renderTrackResult( depths[0].getDeviceImage(), kfusion.reductions[0] );
@@ -243,15 +242,8 @@ int main(int argc, char* argv[])
 		}
 
 		l_depth.SetIntProperty("OutputFormat", 0);
-		//l_depth.SetIntProperty("HoleFilter", TRUE);
-
+		l_depth.SetIntProperty("HoleFilter", TRUE);
 		printf("map props: \n bytes: %d\n maxdepth: %d \n ",l_depth.GetBytesPerPixel(),l_depth.GetDeviceMaxDepth());
-
-		//g_nTexMapX = (((unsigned short)(l_depthMD.FullXRes()-1) / 512) + 1) * 512;
-		//g_nTexMapY = (((unsigned short)(l_imageMD.FullYRes()-1) / 512) + 1) * 512;
-		/*g_pTexMaps.push_back((XnRGB24Pixel*)malloc(g_nTexMapX * g_nTexMapY * sizeof(XnRGB24Pixel)));*/
-		//printf("g_nTexMapX: %d\n", g_nTexMapX);
-		//printf("g_nTexMapY: %d\n", g_nTexMapY);
 
 		g_images.push_back(l_image);
 		g_depths.push_back(l_depth);

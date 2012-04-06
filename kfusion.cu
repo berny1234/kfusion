@@ -406,7 +406,6 @@ void KFusion::Init( const KFusionConfig & config ) {
 		reductions[i].alloc(config.inputSize);
 	}
 
-	//reduction.alloc(config.inputSize);
     vertex.alloc(config.inputSize);
     normal.alloc(config.inputSize);
     rawDepth.alloc(config.inputSize);
