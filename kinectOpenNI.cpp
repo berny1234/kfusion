@@ -101,7 +101,7 @@ void display(void){
 	//{
 
 	XnStatus rc = XN_STATUS_OK;
-	int i = 0; //TODO
+	int i = 1; //TODO
 	rc = g_contexts[i].WaitOneUpdateAll(g_depths[i]);
 	if (rc != XN_STATUS_OK)
 	{
@@ -281,8 +281,8 @@ int main(int argc, char* argv[])
 
 	// these are physical dimensions in meters
 	config.volumeDimensions = make_float3(size);
-	config.nearPlane = 0.1f;
-	config.farPlane = 3.0f;
+	config.nearPlane = 0.4f;
+	config.farPlane = 5.0f;
 	config.mu = 0.1;
 	config.combinedTrackAndReduce = false;
 
