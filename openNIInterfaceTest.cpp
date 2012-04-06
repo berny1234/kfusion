@@ -16,8 +16,6 @@ using namespace xn;
 //---------------------------------------------------------------------------
 // Defines
 //---------------------------------------------------------------------------
-#define SAMPLE_XML_PATH "SamplesConfig.xml"
-
 #define GL_WIN_SIZE_X 1280
 #define GL_WIN_SIZE_Y 1024
 
@@ -260,20 +258,6 @@ int main(int argc, char* argv[])
 
 		NodeInfo deviceNodeInfo = *it;
 		l_context.CreateProductionTree(deviceNodeInfo);
-		//rc = l_context.InitFromXmlFile(SAMPLE_XML_PATH, node, &errors);
-		//g_scriptNodes.push_back(node);
-		/*if (rc == XN_STATUS_NO_NODE_PRESENT)
-		{
-			XnChar strError[1024];
-			errors.ToString(strError, 1024);
-			printf("%s\n", strError);
-			return (rc);
-		}
-		else if (rc != XN_STATUS_OK)
-		{
-			printf("Open failed: %s\n", xnGetStatusString(rc));
-			return (rc);
-		}*/
 
 		DepthGenerator l_depth;
 		ImageGenerator l_image;
@@ -318,74 +302,6 @@ int main(int argc, char* argv[])
 	// Per frame code is in glutDisplay
 	glutMainLoop();
 
-
-/*	rc = g_context.InitFromXmlFile(SAMPLE_XML_PATH, g_scriptNode, &errors);
-	if (rc == XN_STATUS_NO_NODE_PRESENT)
-	{
-		XnChar strError[1024];
-		errors.ToString(strError, 1024);
-		printf("%s\n", strError);
-		return (rc);
-	}
-	else if (rc != XN_STATUS_OK)
-	{
-		printf("Open failed: %s\n", xnGetStatusString(rc));
-		return (rc);
-	}
-
-	rc = g_context.FindExistingNode(XN_NODE_TYPE_DEPTH, g_depth);
-	if (rc != XN_STATUS_OK)
-	{
-		printf("No depth node exists! Check your XML.");
-		return 1;
-	}
-
-	rc = g_context.FindExistingNode(XN_NODE_TYPE_IMAGE, g_image);
-	if (rc != XN_STATUS_OK)
-	{
-		printf("No image node exists! Check your XML.");
-		return 1;
-	}
-
-	g_depth.GetMetaData(g_depthMD);
-	g_image.GetMetaData(g_imageMD);
-
-	// Hybrid mode isn't supported in this sample
-	if (g_imageMD.FullXRes() != g_depthMD.FullXRes() || g_imageMD.FullYRes() != g_depthMD.FullYRes())
-	{
-		printf ("The device depth and image resolution must be equal!\n");
-		return 1;
-	}
-
-	// RGB is the only image format supported.
-	if (g_imageMD.PixelFormat() != XN_PIXEL_FORMAT_RGB24)
-	{
-		printf("The device image format must be RGB24\n");
-		return 1;
-	}
-
-	// Texture map init
-	g_nTexMapX = (((unsigned short)(g_depthMD.FullXRes()-1) / 512) + 1) * 512;
-	g_nTexMapY = (((unsigned short)(g_depthMD.FullYRes()-1) / 512) + 1) * 512;
-	g_pTexMap = (XnRGB24Pixel*)malloc(g_nTexMapX * g_nTexMapY * sizeof(XnRGB24Pixel));
-
-	// OpenGL init
-	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
-	glutInitWindowSize(GL_WIN_SIZE_X, GL_WIN_SIZE_Y);
-	glutCreateWindow ("OpenNI Simple Viewer");
-	glutFullScreen();
-	glutSetCursor(GLUT_CURSOR_NONE);
-
-	glutKeyboardFunc(glutKeyboard);
-	glutDisplayFunc(glutDisplay);
-	glutIdleFunc(glutIdle);
-
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_TEXTURE_2D);
-
-	// Per frame code is in glutDisplay
-	glutMainLoop();*/
 
 	return 0;
 }
