@@ -112,11 +112,11 @@ void display(void){
 
 	}
 
+
 	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
 	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
 	renderTrackResult( depth.getDeviceImage(), kfusion.reductions[1] );
 	cudaDeviceSynchronize();
-	//}
 
 	Stats.sample("render");
 
