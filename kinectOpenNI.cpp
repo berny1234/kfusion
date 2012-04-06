@@ -19,6 +19,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <vector>
 
 using namespace xn;
 
@@ -66,7 +67,9 @@ std::vector<ImageGenerator> g_images;
 
 KFusion kfusion;
 Image<uchar4, HostDevice> lightScene, depth, lightModel;
-Image<uint16_t, HostDevice> depthImage;
+//Image<uint16_t, HostDevice> depthImage;
+
+std::vector<Image<uint16_t, HostDevice>> depthImages;
 
 const float3 light = make_float3(1.0, -2, 1.0);
 const float3 ambient = make_float3(0.1, 0.1, 0.1);
@@ -100,28 +103,24 @@ void display(void){
 	//for(int i = 0; i < g_contexts.size(); i++)
 	//{
 
-	XnStatus rc = XN_STATUS_OK;
-	int i = 1; //TODO
-	rc = g_contexts[i].WaitOneUpdateAll(g_depths[i]);
-	if (rc != XN_STATUS_OK)
-	{
-		printf("Read failed: %s\n", xnGetStatusString(rc));
-		return;
-	}
+		XnStatus rc = XN_STATUS_OK;
+		int i = 0; //TODO
+		rc = g_contexts[i].WaitOneUpdateAll(g_depths[i]);
+		if (rc != XN_STATUS_OK)
+		{
+			printf("Read failed: %s\n", xnGetStatusString(rc));
+			return;
+		}
 
-	DepthMetaData l_depthMD;
-	g_depths[i].GetMetaData(l_depthMD);
-	const XnDepthPixel* pDepth = l_depthMD.Data();
-	
-
-	xnOSMemCopy(depthImage.data(), pDepth, depthImage.size.x*depthImage.size.y*sizeof(XnDepthPixel));
+		xnOSMemCopy(depthImages[i].data(), g_depths[i].GetDepthMap(), depthImages[i].size.x*depthImages[i].size.y*sizeof(XnDepthPixel));
+	//}
 
 	//printf("depth image size %d %d\n", depthImage.size.x*depthImage.size.y);
 	//printf("depth image size %d %d\n",  g_depths[i].GetDataSize());
 
 	////////////////////////////////////////////////////////////////////////
 
-	kfusion.setKinectDeviceDepth(depthImage.getDeviceImage());
+	kfusion.setKinectDeviceDepth(depthImages[i].getDeviceImage());
 	Stats.sample("raw to cooked");
 
 	integrate = kfusion.Track();
@@ -132,6 +131,7 @@ void display(void){
 		Stats.sample("integrate");
 		reset = false;
 	}
+
 
 	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
 	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
@@ -314,7 +314,15 @@ int main(int argc, char* argv[])
 	kfusion.setPose(toMatrix4(initPose));
 
 	lightScene.alloc(config.inputSize), depth.alloc(config.inputSize), lightModel.alloc(config.inputSize);
-	depthImage.alloc(make_uint2(640, 480));
+//	depthImage.alloc(make_uint2(640, 480));
+
+	for(int i = 0; i<g_contexts.size(); i++)
+	{
+		Image<uint16_t, HostDevice> dImage;
+		depthImages.push_back(dImage);
+		depthImages[i].alloc(make_uint2(640, 480));
+
+	}
 
 	//if(InitKinect(depthImage.data()))
 	//	exit(1);
