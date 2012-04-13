@@ -1,6 +1,7 @@
 #include "kfusion.h"
 #include "perfstats.h"
 #include <iostream>
+#include "minimal.cuh"
 
 using namespace std;
 
@@ -11,7 +12,8 @@ __global__ void setSphere( Volume volume, const float3 center, const float radiu
     for(pos.z = 0; pos.z < volume.size.z; ++pos.z) {
         const float d = length(volume.pos(pos) - center);
         if(d < radius)
-            volume.set(pos, make_float2(val, 0.0f));
+            //volume.set(pos, make_float2(val, 0.0f));
+            set(pos, volume.data, volume.size, make_float2(val, 0.0f));
     }
 }
 
@@ -21,7 +23,7 @@ __global__ void setBox( Volume volume, const float3 min_corner, const float3 max
         const float3 p = volume.pos(pos);
         if(min_corner.x < p.x && min_corner.y < p.y && min_corner.z < p.z && 
            p.x < max_corner.x && p.y < max_corner.y && p.z < max_corner.z )
-            volume.set(pos, make_float2(val, 0.0f));
+            set(pos, volume.data, volume.size, make_float2(val, 0.0f));
     }
 }
 
@@ -107,7 +109,7 @@ void renderTrackResult( Image<uchar4> out, const Image<TrackData> & data ){
 __global__ void raycastLight( Image<uchar4> render, const Volume volume, const Matrix4 view, const float nearPlane, const float farPlane, const float step, const float largestep, const float3 light, const float3 ambient){
     const uint2 pos = thr2pos2();
     
-    float4 hit = raycast( volume, pos, view, nearPlane, farPlane, step, largestep);
+    float4 hit = raycast(volume, pos, view, nearPlane, farPlane, step, largestep);
     if(hit.w > 0){
         const float3 test = make_float3(hit);
         const float3 surfNorm = volume.grad(test);
@@ -124,7 +126,7 @@ __global__ void raycastLight( Image<uchar4> render, const Volume volume, const M
     }
 }
 
-void renderVolumeLight( Image<uchar4> out, const Volume & volume, const Matrix4 view, const float nearPlane, const float farPlane, const float largestep, const float3 light, const float3 ambient ){
+void renderVolumeLight( Image<uchar4> out, const Volume volume, const Matrix4 view, const float nearPlane, const float farPlane, const float largestep, const float3 light, const float3 ambient ){
     dim3 block(16,16);
     raycastLight<<<divup(out.size, block), block>>>( out,  volume, view, nearPlane, farPlane, volume.dim.x/volume.size.x, largestep, light, ambient );
 }

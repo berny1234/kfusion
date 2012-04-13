@@ -149,10 +149,14 @@ struct Volume {
     __device__ float v(const uint3 & pos) const {
         return operator[](pos).x;
     }
+    /*
 
-    __device__ void set(const uint3 & pos, const float2 & d ){
-        data[pos.x + pos.y * size.x + pos.z * size.x * size.y] = fromFloat(d);
+        __device__ void set(const uint3 & pos, const float2 & d ){
+        //data[pos.x + pos.y * size.x + pos.z * size.x * size.y] = fromFloat(d);
+        atomicExch((int*)&data[pos.x + pos.y * size.x + pos.z * size.x * size.y], *((int*)&fromFloat(d)));
     }
+
+    */
 
     __device__ float3 pos( const uint3 & p ) const {
         return make_float3((p.x + 0.5f) * dim.x / size.x, (p.y + 0.5f) * dim.y / size.y, (p.z + 0.5f) * dim.z / size.z);
@@ -410,9 +414,14 @@ struct TrackData {
     float J[6];
 };
 
-struct KFusion {
-    Volume integration;
-    std::vector<Image<TrackData, Device>> reductions;
+
+struct Kinect {
+
+    KFusionConfig configuration;
+
+    cudaStream_t index;
+
+    Image<TrackData, Device> reductions;
     Image<float3, Device> vertex, normal;
 
     std::vector<Image<float3, Device> > inputVertex, inputNormal;
@@ -423,22 +432,13 @@ struct KFusion {
 
     Image<float, Device> gaussian;
 
-    KFusionConfig configuration;
+	Matrix4 pose;
 
-   // Matrix4 pose;
-	std::vector<Matrix4> poses;
-	int kFusionDevice;
+    void Init( const KFusionConfig & config, unsigned int index); // allocates the volume and image data on the device
 
-    void Init( const KFusionConfig & config ); // allocates the volume and image data on the device
-    void Clear();  // releases the allocated device memory
-
-    void addPose( const Matrix4 & p ); // adds a pose of a camera
-	void setPose( const Matrix4 & p, const int d  ); // sets the current pose of the camera
-
-	void setKFusionDevice( const int d ); // sets the current kfusion device
+	void setPose( const Matrix4 & p); // sets the current pose of the camera
 
     // high level API to run a simple tracking - reconstruction loop
-    void Reset(); // removes all reconstruction information
 
     template<typename A>
     void setDepth( const Image<float, A> & depth  ){ // passes in a metric depth buffer as float array
@@ -449,6 +449,19 @@ struct KFusion {
 
     bool Track(); // Estimates new camera position based on the last depth map set and the volume
     void Integrate(); // Integrates the current depth map using the current camera pose
+};
+
+struct KFusion {
+
+    void Init( const KFusionConfig & config);
+
+    KFusionConfig configuration;
+
+    void Reset(); // removes all reconstruction information
+
+    void Clear();  // releases the allocated device memory
+
+    std::vector<Kinect*> kinects;
 };
 
 int printCUDAError(); // print the last error
@@ -483,7 +496,7 @@ __device__ __forceinline__ float4 raycast( const Volume volume, const uint2 pos,
     // find the largest tmin and the smallest tmax
     const float largest_tmin = fmaxf(fmaxf(tmin.x, tmin.y), fmaxf(tmin.x, tmin.z));
     const float smallest_tmax = fminf(fminf(tmax.x, tmax.y), fminf(tmax.x, tmax.z));
-
+    
     // check against near and far plane
     const float tnear = fmaxf(largest_tmin, nearPlane);
     const float tfar = fminf(smallest_tmax, farPlane);

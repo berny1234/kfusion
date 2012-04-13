@@ -20,6 +20,7 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include <pthread.h>
 
 using namespace xn;
 
@@ -37,6 +38,8 @@ using namespace TooN;
 #define GL_GENERATE_MIPMAP_HINT_SGIS      0x8192
 #endif
 
+#define USE_MULTITHREADED 1
+
 
 //---------------------------------------------------------------------------
 // Globals
@@ -48,7 +51,7 @@ std::vector<DepthGenerator> g_depths;
 std::vector<ImageGenerator> g_images;
 
 KFusion kfusion;
-Image<uchar4, HostDevice> lightScene, lightModel;
+Image<uchar4, HostDevice> lightScene, lightModel, lightScene2, lightModel2;
 
 std::vector<Image<uchar4, HostDevice>> depths;
 //Image<uint16_t, HostDevice> depthImage;
@@ -76,6 +79,35 @@ void CloseKinect(){
 	}
 }
 
+void* TrackAndIntegrate(void* in)
+{
+    uint device = (uint)in;
+	XnStatus rc = XN_STATUS_OK;
+	rc = g_contexts[device].WaitAnyUpdateAll();
+	if (rc != XN_STATUS_OK)
+	{
+		printf("Read failed: %s\n", xnGetStatusString(rc));
+		return NULL;
+	}
+
+	xnOSMemCopy(depthImages[device].data(), g_depths[device].GetDepthMap(), depthImages[device].size.x*depthImages[device].size.y*sizeof(XnDepthPixel));
+
+    Kinect* currentKinect = kfusion.kinects[device];
+
+    currentKinect->setKinectDeviceDepth(depthImages[device].getDeviceImage());
+		
+    Stats.sample("raw to cooked");
+
+    bool integrate = currentKinect->Track();
+    Stats.sample("track");
+
+	if(integrate || reset){
+        currentKinect->Integrate();
+	    Stats.sample("integrate");
+		reset = false;
+	}
+}
+
 void display(void){
 	const uint2 imageSize = kfusion.configuration.inputSize;
 	static bool integrate = true;
@@ -85,40 +117,47 @@ void display(void){
 	const double startProcessing = Stats.sample("kinect");
 	////////////////////////////////////////////////////////////////////////
 	//DepthFrameKinect();
+
+#if USE_MULTITHREADED
+
+    std::vector<pthread_t> threads;
+    pthread_attr_t attr;
+    int stat;
+
+    threads.resize(kfusion.configuration.numUsedDevices);
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    for(uint i = 0; i < threads.size(); i++)
+    {
+        stat = pthread_create(&threads[i], &attr, TrackAndIntegrate, (void*)i);
+    }
+
+    pthread_attr_destroy(&attr);
+
+    void* status;
+
+    for(uint i = 0; i < threads.size(); i++)
+    {
+        stat = pthread_join(threads[i], &status);
+    }
+
+#else
 	for(int i = 0; i < g_contexts.size(); i++)
-	{
-		kfusion.setKFusionDevice(i);
-		XnStatus rc = XN_STATUS_OK;
-		rc = g_contexts[i].WaitAnyUpdateAll();
-		if (rc != XN_STATUS_OK)
-		{
-			printf("Read failed: %s\n", xnGetStatusString(rc));
-			return;
-		}
+    {
+        TrackAndIntegrate((void*)i);
+    }
+#endif
 
-		xnOSMemCopy(depthImages[i].data(), g_depths[i].GetDepthMap(), depthImages[i].size.x*depthImages[i].size.y*sizeof(XnDepthPixel));
+    cudaDeviceSynchronize();
 
-		////////////////////////////////////////////////////////////////////////
+    Kinect* first = kfusion.kinects[0], *second = kfusion.kinects[1];
 
-		kfusion.setKinectDeviceDepth(depthImages[i].getDeviceImage());
-		Stats.sample("raw to cooked");
+    renderLight( lightModel.getDeviceImage(), first->vertex, first->normal, light, ambient);
+    renderLight( lightScene.getDeviceImage(), first->inputVertex[0], first->inputNormal[0], light, ambient );
+    renderLight( lightModel2.getDeviceImage(), second->vertex, second->normal, light, ambient);
+    renderLight( lightScene2.getDeviceImage(), second->inputVertex[0], second->inputNormal[0], light, ambient );
 
-		integrate = kfusion.Track();
-		Stats.sample("track");
-
-		if(integrate || reset){
-			kfusion.Integrate();
-			Stats.sample("integrate");
-			reset = false;
-		}
-		cudaDeviceSynchronize();
-	}
-
-	//TODO: this is now just debug output for the first two devices. 
-	renderLight( lightModel.getDeviceImage(), kfusion.vertex, kfusion.normal, light, ambient);
-	renderLight( lightScene.getDeviceImage(), kfusion.inputVertex[0], kfusion.inputNormal[0], light, ambient );
-	renderTrackResult( depths[0].getDeviceImage(), kfusion.reductions[0] );
-	renderTrackResult( depths[1].getDeviceImage(), kfusion.reductions[1] );
 	cudaDeviceSynchronize();
 
 	Stats.sample("render");
@@ -127,12 +166,14 @@ void display(void){
 	glRasterPos2i(0,imageSize.y * 0);
 	glDrawPixels(lightScene);
 	glRasterPos2i(imageSize.x, imageSize.y * 0);
-	glDrawPixels(depths[0]);
+	glDrawPixels(lightScene2);
 	glRasterPos2i(0,imageSize.y * 1);
 	glDrawPixels(lightModel);
 	glRasterPos2i(imageSize.x,imageSize.y * 1);
-	glDrawPixels(depths[1]);
+    glDrawPixels(lightModel2);
 	const double endProcessing = Stats.sample("draw");
+
+    //printf(buff);
 
 	Stats.sample("total", endProcessing - startFrame, PerfStats::TIME);
 	Stats.sample("total_proc", endProcessing - startProcessing, PerfStats::TIME);
@@ -142,12 +183,11 @@ void display(void){
 
 	++counter;
 
-	if(counter % 50 == 0){
+	if(counter % 200 == 0){
 		Stats.print();
 		Stats.reset();
 		cout << endl;
 	}
-
 
 	glutSwapBuffers();
 }
@@ -163,7 +203,7 @@ void keys(unsigned char key, int x, int y){
 		kfusion.Reset();
 		for(int i = 0; i<g_contexts.size(); i++)
 		{
-			kfusion.setPose(toMatrix4(initPose), i);
+			//kfusion.setPose(toMatrix4(initPose), i);
 		}
 		reset = true;
 		break;
@@ -190,7 +230,6 @@ void exitFunc(void){
 	kfusion.Clear();
 	cudaDeviceReset();
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -293,12 +332,13 @@ int main(int argc, char* argv[])
 		exit(1);
 
 	initPose = SE3<float>(makeVector(size/2, size/2, 0, 0, 0, 0));
-	kfusion.addPose(toMatrix4(initPose));
+	kfusion.kinects[0]->setPose(toMatrix4(initPose));
 	initPose2 = SE3<float>(makeVector(size/2, -size/2, 0, 0, 0, 0));
-	kfusion.addPose(toMatrix4(initPose));
+	kfusion.kinects[1]->setPose(toMatrix4(initPose));
 
 
 	lightScene.alloc(config.inputSize), lightModel.alloc(config.inputSize);
+    lightScene2.alloc(config.inputSize), lightModel2.alloc(config.inputSize);
 //	depthImage.alloc(make_uint2(640, 480));
 	depthImages.resize(g_contexts.size());
 	depths.resize(g_contexts.size());
@@ -313,6 +353,23 @@ int main(int argc, char* argv[])
 	glutKeyboardFunc(keys);
 	glutReshapeFunc(reshape);
 	glutIdleFunc(idle);
+
+    kfusion.kinects[1]->pose.data[0].x = 0.9368;
+    kfusion.kinects[1]->pose.data[0].y = 0.2528;
+    kfusion.kinects[1]->pose.data[0].z = 0.3182;
+    kfusion.kinects[1]->pose.data[0].w = 0.499;
+    kfusion.kinects[1]->pose.data[1].x = -0.244;
+    kfusion.kinects[1]->pose.data[1].y = 0.9993;
+    kfusion.kinects[1]->pose.data[1].z = -0.0214;
+    kfusion.kinects[1]->pose.data[1].w = 1.019;
+   kfusion.kinects[1]->pose.data[2].x = -0.318;
+    kfusion.kinects[1]->pose.data[2].y = -0.0067;
+    kfusion.kinects[1]->pose.data[2].z = 0.947;
+    kfusion.kinects[1]->pose.data[2].w = 0.019;
+    kfusion.kinects[1]->pose.data[3].x = 0;
+    kfusion.kinects[1]->pose.data[3].y = 0;
+    kfusion.kinects[1]->pose.data[3].z = 0;
+    kfusion.kinects[1]->pose.data[3].w = 1;
 
 	glutMainLoop();
 

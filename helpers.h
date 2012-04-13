@@ -5,6 +5,7 @@
 #include <float.h>
 #include <TooN/se3.h>
 
+#include <windows.h>
 #include <cuda_gl_interop.h> // includes cuda_gl_interop.h
 
 template<typename P>
