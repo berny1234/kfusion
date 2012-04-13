@@ -22,6 +22,9 @@
 #include <vector>
 #include <pthread.h>
 
+#include <fstream>
+#include <string>
+
 using namespace xn;
 
 #include "perfstats.h"
@@ -39,6 +42,8 @@ using namespace TooN;
 #endif
 
 #define USE_MULTITHREADED 1
+
+#define ROOM_INIT_FILE "currentRoomInitPoses.cal" //if no paramter is given
 
 
 //---------------------------------------------------------------------------
@@ -58,11 +63,12 @@ std::vector<Image<uchar4, HostDevice>> depths;
 
 std::vector<Image<uint16_t, HostDevice>> depthImages;
 
-const float3 light = make_float3(1.0, -2, 1.0);
-const float3 ambient = make_float3(0.1, 0.1, 0.1);
+const float3 light = make_float3(1.0, 2, 1.0);
+const float3 ambient = make_float3(0.2, 0.2, 0.2);
 
 SE3<float> initPose;
 SE3<float> initPose2;
+std::vector<Matrix4> initPoses;
 
 int counter = 0;
 bool reset = true;
@@ -151,12 +157,16 @@ void display(void){
 
     cudaDeviceSynchronize();
 
+	//just for debugging 
+	//TODO: make many small subwindows
     Kinect* first = kfusion.kinects[0], *second = kfusion.kinects[1];
 
     renderLight( lightModel.getDeviceImage(), first->vertex, first->normal, light, ambient);
-    renderLight( lightScene.getDeviceImage(), first->inputVertex[0], first->inputNormal[0], light, ambient );
+	renderTrackResult(lightScene.getDeviceImage(), first->reductions);
+    //renderLight( lightScene.getDeviceImage(), first->inputVertex[0], first->inputNormal[0], light, ambient );
     renderLight( lightModel2.getDeviceImage(), second->vertex, second->normal, light, ambient);
-    renderLight( lightScene2.getDeviceImage(), second->inputVertex[0], second->inputNormal[0], light, ambient );
+	renderTrackResult(lightScene2.getDeviceImage(), second->reductions);
+    //renderLight( lightScene2.getDeviceImage(), second->inputVertex[0], second->inputNormal[0], light, ambient );
 
 	cudaDeviceSynchronize();
 
@@ -183,9 +193,13 @@ void display(void){
 
 	++counter;
 
-	if(counter % 200 == 0){
+	if(counter % 50 == 0){
 		Stats.print();
 		Stats.reset();
+		for(int i = 0; i< g_contexts.size(); i++)
+		{
+			std::cout << "pose Kinect " << i << ": " << std::endl << kfusion.kinects[i]->pose << std::endl;
+		}
 		cout << endl;
 	}
 
@@ -201,9 +215,9 @@ void keys(unsigned char key, int x, int y){
 	switch(key){
 	case 'c':
 		kfusion.Reset();
-		for(int i = 0; i<g_contexts.size(); i++)
+		for(int i = 0; i< g_contexts.size(); i++)
 		{
-			//kfusion.setPose(toMatrix4(initPose), i);
+			kfusion.kinects[i]->setPose(initPoses[i]);
 		}
 		reset = true;
 		break;
@@ -231,9 +245,64 @@ void exitFunc(void){
 	cudaDeviceReset();
 }
 
+bool initKinectPosesFromFile(KFusion kfusion, std::string filename, int numDevices)
+{
+	std::string line;
+	std::ifstream calibFile(filename);
+	int camCount = 0;
+
+	SE3<float> stbPose = makeVector(0,0,0,-1.57,0,0);
+	Matrix4 derotMat = toMatrix4(stbPose);
+
+	if(calibFile.is_open())
+	{
+		while(calibFile.good())
+		{
+			getline(calibFile,line,' ');
+			if(line.find("Pose:") != std::string::npos)
+			{
+				Matrix4 mat = initPoses[camCount];
+				for(int i = 0; i < 3; i++)
+				{
+					getline(calibFile,line,' ');
+					mat.data[i].x = atof(line.c_str());
+					getline(calibFile,line,' ');
+					mat.data[i].y = atof(line.c_str());
+					getline(calibFile,line,' ');
+					mat.data[i].z = atof(line.c_str());
+					getline(calibFile,line,' ');
+					mat.data[i].w = atof(line.c_str())/1000.0f;  
+				}
+				
+				//TODO
+			    initPoses[camCount] = initPoses[camCount]*(mat/**derotMat*/);
+
+				kfusion.kinects[camCount]->setPose(initPoses[camCount]);
+				std::cout << "pose Kinect set " << camCount << ": " << std::endl << kfusion.kinects[camCount]->pose << std::endl;
+
+				camCount++;
+			}
+		}
+		calibFile.close();
+	}
+	else
+	{
+		printf("unable to load room calibration file!");
+	}
+
+	if(camCount != numDevices)
+	{
+		printf("number of cameras not equal to number of calibrated cameras!\n");
+		return false;
+	}
+
+
+	return true;
+}
+
 int main(int argc, char* argv[])
 {
-	const float size = (argc > 1) ? atof(argv[1]) : 2.f;
+	const float size = /*(argc > 1) ? atof(argv[1]) :*/ 5.f;
 	XnStatus rc;
 	EnumerationErrors errors;
 
@@ -317,10 +386,8 @@ int main(int argc, char* argv[])
 	config.iterations[1] = 5;
 	config.iterations[2] = 4;
 
-	config.dist_threshold = (argc > 2 ) ? atof(argv[2]) : config.dist_threshold;
-	config.normal_threshold = (argc > 3 ) ? atof(argv[3]) : config.normal_threshold;
-
-	initPose = SE3<float>(makeVector(size/2, size/2, 0, 0, 0, 0));
+	config.dist_threshold = /*(argc > 2 ) ? atof(argv[2]) :*/ config.dist_threshold;
+	config.normal_threshold = /*(argc > 3 ) ? atof(argv[3]) :*/ config.normal_threshold;
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE );
@@ -331,11 +398,36 @@ int main(int argc, char* argv[])
 	if(printCUDAError())
 		exit(1);
 
-	initPose = SE3<float>(makeVector(size/2, size/2, 0, 0, 0, 0));
-	kfusion.kinects[0]->setPose(toMatrix4(initPose));
-	initPose2 = SE3<float>(makeVector(size/2, -size/2, 0, 0, 0, 0));
-	kfusion.kinects[1]->setPose(toMatrix4(initPose));
+	for(int i = 0; i < g_contexts.size(); i++)
+	{
+		initPose = SE3<float>(makeVector(size/2, size/2, 0, 0, 0, 0));
+		initPoses.push_back(toMatrix4(initPose));
+		kfusion.kinects[i]->setPose(initPoses[i]);
+	}
+	
+	//kfusion.kinects[0]->setPose(toMatrix4(initPose));
+	//initPose2 = SE3<float>(makeVector(size/2, -size/2, 0, 0, 0, 0));
+	//kfusion.kinects[1]->setPose(toMatrix4(initPose));
 
+	//TODO read init pose from file
+	std::string initPoseFileName;
+	if(argc < 2)
+	{
+		printf("using default init file.\n");
+		initPoseFileName = std::string(ROOM_INIT_FILE);
+	}
+	else
+	{
+		printf("using init file %s.\n", argv[1]);
+		initPoseFileName = std::string(argv[1]);
+	}
+
+
+	if(!initKinectPosesFromFile(kfusion, initPoseFileName, config.numUsedDevices))
+	{
+		printf("could not init Kinect poses! Exiting...\n");
+		return -1;
+	}
 
 	lightScene.alloc(config.inputSize), lightModel.alloc(config.inputSize);
     lightScene2.alloc(config.inputSize), lightModel2.alloc(config.inputSize);
@@ -354,7 +446,7 @@ int main(int argc, char* argv[])
 	glutReshapeFunc(reshape);
 	glutIdleFunc(idle);
 
-    kfusion.kinects[1]->pose.data[0].x = 0.9368;
+    /*kfusion.kinects[1]->pose.data[0].x = 0.9368;
     kfusion.kinects[1]->pose.data[0].y = 0.2528;
     kfusion.kinects[1]->pose.data[0].z = 0.3182;
     kfusion.kinects[1]->pose.data[0].w = 0.499;
@@ -362,14 +454,14 @@ int main(int argc, char* argv[])
     kfusion.kinects[1]->pose.data[1].y = 0.9993;
     kfusion.kinects[1]->pose.data[1].z = -0.0214;
     kfusion.kinects[1]->pose.data[1].w = 1.019;
-   kfusion.kinects[1]->pose.data[2].x = -0.318;
+    kfusion.kinects[1]->pose.data[2].x = -0.318;
     kfusion.kinects[1]->pose.data[2].y = -0.0067;
     kfusion.kinects[1]->pose.data[2].z = 0.947;
     kfusion.kinects[1]->pose.data[2].w = 0.019;
     kfusion.kinects[1]->pose.data[3].x = 0;
     kfusion.kinects[1]->pose.data[3].y = 0;
     kfusion.kinects[1]->pose.data[3].z = 0;
-    kfusion.kinects[1]->pose.data[3].w = 1;
+    kfusion.kinects[1]->pose.data[3].w = 1;*/
 
 	glutMainLoop();
 
