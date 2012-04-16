@@ -213,6 +213,10 @@ void idle(void){
 
 void keys(unsigned char key, int x, int y){
 	switch(key){
+	case 'r':
+		printf("starting recording oni file.\n");
+		//TODO
+		break;
 	case 'c':
 		kfusion.Reset();
 		for(int i = 0; i< g_contexts.size(); i++)
